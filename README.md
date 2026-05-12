@@ -4,9 +4,9 @@ Jogo Frogger de terminal em Go com arquitetura concorrente baseada em goroutines
 
 ## Grupo
 
-- Ana Clara — [matrícula]
-- [Integrante 2] — [matrícula]
-
+- Ana Clara Purper da Silva — [24200820]
+- Bianca Piassini — [24201030]
+- Tarciso Mota — [24200676]
 ---
 
 ## Pré-requisitos
