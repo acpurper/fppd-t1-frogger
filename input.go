@@ -3,28 +3,29 @@ package main
 import (
 	"context"
 	"os"
-	"sync"
+	"syscall"
+	"time"
 )
 
-func runInput(ctx context.Context, wg *sync.WaitGroup, inputCh chan<- Command) {
-	defer wg.Done()
+// input.go contém a lógica de leitura do teclado em modo raw. A função
+// runInput roda em uma goroutine dedicada e envia comandos para o game loop
+// através de `inputCh`.
 
-	readCh := make(chan byte, 64)
-	go func() {
-		buf := make([]byte, 16)
-		for {
-			n, err := os.Stdin.Read(buf)
-			if err != nil || n == 0 {
-				return
-			}
-			for i := 0; i < n; i++ {
-				select {
-				case readCh <- buf[i]:
-				default:
-				}
-			}
-		}
-	}()
+// runInput é a goroutine responsável por ler o stdin e transformar bytes em comandos.
+// O QUE: lê bytes do teclado e converte em valores do tipo Command (CmdUp, CmdDown...).
+// POR QUE: usamos um channel (`inputCh`) para enviar comandos ao game loop em vez de
+// compartilhar variáveis, porque canais garantem que produtor e consumidor não acessem
+// os mesmos dados ao mesmo tempo (evitando data races).
+// COMO encerra: a função observa `ctx.Done()` em seu loop; quando `cancel()` é chamado
+// (em main ou no gameLoop), runInput retorna e encerra.
+func runInput(ctx context.Context, inputCh chan<- Command) {
+	// Obtemos o descritor do stdin e colocamos em non-blocking para que a
+	// leitura não trave a goroutine quando não houver dados.
+	fd := int(os.Stdin.Fd())
+	_ = syscall.SetNonblock(fd, true)
+	defer syscall.SetNonblock(fd, false)
+
+	buf := make([]byte, 32)
 
 	const (
 		escStateNone = iota
@@ -34,13 +35,31 @@ func runInput(ctx context.Context, wg *sync.WaitGroup, inputCh chan<- Command) {
 	)
 	var state int
 
+	// Loop principal: tenta ler sem bloquear; quando não houver dados, faz
+	// uma pequena pausa e re-tenta. Em cada byte lido, converte para Command
+	// e envia pelo channel `inputCh`.
 	for {
 		select {
 		case <-ctx.Done():
+			// Quando o contexto for cancelado, encerramos a goroutine.
 			return
-		case b := <-readCh:
-			if cmd, ok := parseInputByte(&state, b); ok {
-				sendCommand(inputCh, cmd)
+		default:
+			n, err := syscall.Read(fd, buf)
+			if err != nil {
+				if err == syscall.EAGAIN || err == syscall.EWOULDBLOCK {
+					time.Sleep(10 * time.Millisecond)
+					continue
+				}
+				return
+			}
+			if n == 0 {
+				time.Sleep(10 * time.Millisecond)
+				continue
+			}
+			for i := 0; i < n; i++ {
+				if cmd, ok := parseInputByte(&state, buf[i]); ok {
+					sendCommand(inputCh, cmd)
+				}
 			}
 		}
 	}

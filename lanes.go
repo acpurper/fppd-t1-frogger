@@ -8,12 +8,9 @@ import (
 
 func runLane(ctx context.Context, wg *sync.WaitGroup, def LaneDef, carEventsCh chan<- CarEvent) {
 	defer wg.Done()
-
 	ticker := time.NewTicker(def.Interval)
 	defer ticker.Stop()
-
 	var cars []Car
-
 	for {
 		select {
 		case <-ctx.Done():
@@ -32,7 +29,6 @@ func runLane(ctx context.Context, wg *sync.WaitGroup, def LaneDef, carEventsCh c
 				}
 			}
 			cars = moved
-
 			if canSpawn(cars, def) {
 				var spawnCol int
 				if def.Dir == DirRight {
@@ -42,10 +38,8 @@ func runLane(ctx context.Context, wg *sync.WaitGroup, def LaneDef, carEventsCh c
 				}
 				cars = append(cars, Car{Col: spawnCol})
 			}
-
 			snapshot := make([]Car, len(cars))
 			copy(snapshot, cars)
-
 			select {
 			case carEventsCh <- CarEvent{Lane: def.Row, Cars: snapshot}:
 			case <-ctx.Done():
@@ -76,3 +70,5 @@ func canSpawn(cars []Car, def LaneDef) bool {
 	}
 	return maxCol <= GridCols-def.SpawnGap
 }
+
+

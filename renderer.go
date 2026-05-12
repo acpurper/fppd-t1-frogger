@@ -7,6 +7,9 @@ import (
 	"sync"
 )
 
+// renderer.go contém a lógica de apresentação no terminal (ANSI). O renderer
+// consome snapshots do estado do jogo e desenha a tela.
+
 const (
 	ansiReset  = "\x1b[0m"
 	ansiBold   = "\x1b[1m"
@@ -26,20 +29,29 @@ func init() {
 	}
 }
 
+// runRenderer recebe snapshots do game loop e imprime no terminal.
+// O QUE: desenha o estado recebido em `renderCh` usando códigos ANSI.
+// POR QUE: mantemos rendering separado do game logic; o renderer só consome
+// dados imutáveis (snapshots) e não altera estado.
+// COMO encerra: observa `ctx.Done()` e retorna quando o contexto é cancelado.
 func runRenderer(ctx context.Context, wg *sync.WaitGroup, renderCh <-chan GameState) {
 	defer wg.Done()
-	os.Stdout.WriteString("\x1b[?25l")
+
+	os.Stdout.WriteString("\x1b[?25l") // esconde cursor
 
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case state := <-renderCh:
+			// Recebemos um snapshot deep-copiado pelo game loop, logo é
+			// seguro acessar sem riscos de race.
 			renderFrame(state)
 		}
 	}
 }
 
+// renderFrame monta a string da tela e escreve no stdout.
 func renderFrame(state GameState) {
 	var sb strings.Builder
 

@@ -10,6 +10,9 @@ import (
 	"golang.org/x/term"
 )
 
+// main.go contém o inicializador da aplicação e a orquestração das goroutines
+// principais. Criamos os canais, o contexto de shutdown e o WaitGroup que
+// aguarda o término de todas as goroutines.
 func main() {
 	fd := int(os.Stdin.Fd())
 	if !term.IsTerminal(fd) {
@@ -41,7 +44,10 @@ func main() {
 	}()
 
 	wg.Add(1)
-	go runInput(ctx, &wg, inputCh)
+	go func() {
+		defer wg.Done()
+		runInput(ctx, inputCh)
+	}()
 
 	wg.Add(1)
 	go runTicker(ctx, &wg, tickCh)
@@ -59,8 +65,6 @@ func main() {
 
 	wg.Wait()
 	signal.Stop(sigCh)
-
-	// Restore terminal to original state.
 	_ = term.Restore(fd, oldState)
-	os.Stdout.WriteString("\x1b[2J\x1b[H\x1b[?25h") // clear, home, show cursor
+	os.Stdout.WriteString("\x1b[2J\x1b[H\x1b[?25h")
 }
