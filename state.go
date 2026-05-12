@@ -16,7 +16,7 @@ type LaneDef struct {
 	Row      int
 	Dir      Direction
 	Interval time.Duration
-	SpawnGap int // min cols from spawn edge before a new car may appear
+	SpawnGap int
 }
 
 var laneDefs = []LaneDef{
@@ -42,15 +42,13 @@ const (
 	DirLeft
 )
 
-// Car represents a vehicle; Col is the leftmost column it occupies.
-// It always occupies [Col, Col+CarWidth).
 type Car struct {
 	Col int
 }
 
 type CarEvent struct {
-	Lane int  // row that owns these cars
-	Cars []Car // complete snapshot of that lane's cars
+	Lane int
+	Cars []Car
 }
 
 type Status int
@@ -61,9 +59,6 @@ const (
 	StatusLost
 )
 
-// GameState is the authoritative game state owned exclusively by runGameLoop.
-// Cars is an array of slice headers; the slices themselves are immutable once
-// handed off via a channel, so no mutex is needed for the snapshot copies.
 type GameState struct {
 	FrogRow int
 	FrogCol int

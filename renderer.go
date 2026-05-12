@@ -7,7 +7,6 @@ import (
 	"sync"
 )
 
-// ANSI helpers
 const (
 	ansiReset  = "\x1b[0m"
 	ansiBold   = "\x1b[1m"
@@ -18,8 +17,6 @@ const (
 	ansiWhite  = "\x1b[37m"
 )
 
-// laneRowDir maps a row number to its lane direction for rendering.
-// Populated once at startup (before any goroutine touches it).
 var laneRowDir map[int]Direction
 
 func init() {
@@ -29,10 +26,9 @@ func init() {
 	}
 }
 
-// runRenderer receives GameState snapshots and redraws the terminal each time.
 func runRenderer(ctx context.Context, wg *sync.WaitGroup, renderCh <-chan GameState) {
 	defer wg.Done()
-	os.Stdout.WriteString("\x1b[?25l") // hide cursor while playing
+	os.Stdout.WriteString("\x1b[?25l")
 
 	for {
 		select {
@@ -44,15 +40,11 @@ func runRenderer(ctx context.Context, wg *sync.WaitGroup, renderCh <-chan GameSt
 	}
 }
 
-// renderFrame builds the complete frame in a strings.Builder and writes it in
-// a single call to minimise flicker.  All newlines are \r\n for raw-mode compat.
 func renderFrame(state GameState) {
 	var sb strings.Builder
 
-	// Home + clear screen
 	sb.WriteString("\x1b[H\x1b[2J")
 
-	// ── Header ────────────────────────────────────────────────────────────
 	sb.WriteString(ansiBold + "  FROGGER   " + ansiReset)
 	sb.WriteString("Lives: ")
 	for i := 0; i < state.Lives; i++ {
@@ -60,18 +52,14 @@ func renderFrame(state GameState) {
 	}
 	sb.WriteString("\r\n")
 
-	// ── Top border ────────────────────────────────────────────────────────
 	sb.WriteString("+" + strings.Repeat("-", GridCols) + "+\r\n")
 
-	// ── Rows ──────────────────────────────────────────────────────────────
 	for row := 0; row < GridRows; row++ {
 		sb.WriteByte('|')
 
-		// cells[col] = (character, colorPrefix)
-		chars  := make([]byte, GridCols)
+		chars := make([]byte, GridCols)
 		colors := make([]string, GridCols)
 
-		// Background
 		switch {
 		case row == GoalRow:
 			for i := range chars {
@@ -95,7 +83,6 @@ func renderFrame(state GameState) {
 			}
 		}
 
-		// Cars
 		for _, car := range state.Cars[row] {
 			dir := laneRowDir[row]
 			for w := 0; w < CarWidth; w++ {
@@ -120,13 +107,11 @@ func renderFrame(state GameState) {
 			}
 		}
 
-		// Frog (drawn last so it's always visible)
 		if row == state.FrogRow && state.FrogCol >= 0 && state.FrogCol < GridCols {
 			chars[state.FrogCol] = '@'
 			colors[state.FrogCol] = ansiGreen + ansiBold
 		}
 
-		// Emit row
 		for i, ch := range chars {
 			if colors[i] != "" {
 				sb.WriteString(colors[i])
@@ -139,10 +124,8 @@ func renderFrame(state GameState) {
 		sb.WriteString("|\r\n")
 	}
 
-	// ── Bottom border ─────────────────────────────────────────────────────
 	sb.WriteString("+" + strings.Repeat("-", GridCols) + "+\r\n")
 
-	// ── Status line ───────────────────────────────────────────────────────
 	switch state.Status {
 	case StatusWon:
 		sb.WriteString(ansiGreen + ansiBold + "  YOU WIN! Congratulations!   " + ansiReset + "\r\n")

@@ -6,41 +6,100 @@ import (
 	"sync"
 )
 
-// runInput reads raw keypresses from stdin and converts them to Commands.
-// A non-WaitGroup sub-goroutine handles the blocking Read so the outer loop
-// can exit cleanly on ctx.Done() without being stuck inside a syscall.
 func runInput(ctx context.Context, wg *sync.WaitGroup, inputCh chan<- Command) {
 	defer wg.Done()
 
-	readCh := make(chan byte, 16)
+	readCh := make(chan byte, 64)
 	go func() {
-		buf := make([]byte, 1)
+		buf := make([]byte, 16)
 		for {
 			n, err := os.Stdin.Read(buf)
 			if err != nil || n == 0 {
 				return
 			}
-			// Non-blocking: drop byte if readCh is full.
-			select {
-			case readCh <- buf[0]:
-			default:
+			for i := 0; i < n; i++ {
+				select {
+				case readCh <- buf[i]:
+				default:
+				}
 			}
 		}
 	}()
+
+	const (
+		escStateNone = iota
+		escStateEsc
+		escStateEscBracket
+		escStateZero
+	)
+	var state int
 
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case b := <-readCh:
-			if cmd, ok := byteToCommand(b); ok {
-				// Non-blocking: drop command if inputCh is full.
-				select {
-				case inputCh <- cmd:
-				default:
-				}
+			if cmd, ok := parseInputByte(&state, b); ok {
+				sendCommand(inputCh, cmd)
 			}
 		}
+	}
+}
+
+func parseInputByte(state *int, b byte) (Command, bool) {
+	switch *state {
+	case 0:
+		switch b {
+		case 0x1b:
+			*state = 1
+			return 0, false
+		case 0x00, 0xe0:
+			*state = 3
+			return 0, false
+		default:
+			return byteToCommand(b)
+		}
+	case 1:
+		if b == '[' || b == 'O' {
+			*state = 2
+			return 0, false
+		}
+		*state = 0
+		return 0, false
+	case 2:
+		*state = 0
+		switch b {
+		case 'A':
+			return CmdUp, true
+		case 'B':
+			return CmdDown, true
+		case 'C':
+			return CmdRight, true
+		case 'D':
+			return CmdLeft, true
+		}
+		return 0, false
+	case 3:
+		*state = 0
+		switch b {
+		case 72:
+			return CmdUp, true
+		case 80:
+			return CmdDown, true
+		case 77:
+			return CmdRight, true
+		case 75:
+			return CmdLeft, true
+		}
+		return 0, false
+	}
+	return 0, false
+}
+
+func sendCommand(inputCh chan<- Command, cmd Command) {
+	select {
+	case inputCh <- cmd:
+	default:
 	}
 }
 
@@ -54,7 +113,7 @@ func byteToCommand(b byte) (Command, bool) {
 		return CmdLeft, true
 	case 'd', 'D':
 		return CmdRight, true
-	case 'q', 'Q', 3: // 3 = Ctrl+C in raw mode
+	case 'q', 'Q', 3:
 		return CmdQuit, true
 	}
 	return 0, false

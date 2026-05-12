@@ -25,13 +25,11 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	var wg sync.WaitGroup
 
-	// Channels — all goroutines communicate only through these.
-	inputCh     := make(chan Command, 8)
-	tickCh      := make(chan struct{}, 1)
+	inputCh := make(chan Command, 8)
+	tickCh := make(chan struct{}, 1)
 	carEventsCh := make(chan CarEvent, 32)
-	renderCh    := make(chan GameState, 1)
+	renderCh := make(chan GameState, 1)
 
-	// Forward SIGINT/SIGTERM to the context; not tracked in WaitGroup.
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
 	go func() {
@@ -42,25 +40,20 @@ func main() {
 		}
 	}()
 
-	// Goroutine 1: input
 	wg.Add(1)
 	go runInput(ctx, &wg, inputCh)
 
-	// Goroutine 2: ticker (30 FPS clock)
 	wg.Add(1)
 	go runTicker(ctx, &wg, tickCh)
 
-	// Goroutines 3, 4, 5: one per lane
 	for _, def := range laneDefs {
 		wg.Add(1)
 		go runLane(ctx, &wg, def, carEventsCh)
 	}
 
-	// Goroutine 6: renderer
 	wg.Add(1)
 	go runRenderer(ctx, &wg, renderCh)
 
-	// Goroutine 7: game loop (authoritative state)
 	wg.Add(1)
 	go runGameLoop(ctx, cancel, &wg, inputCh, tickCh, carEventsCh, renderCh)
 
