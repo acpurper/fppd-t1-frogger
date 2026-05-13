@@ -86,7 +86,3 @@ Isso garante que não haja goroutines vazando: todas observam o mesmo contexto e
 - Entidades autônomas: lanes são entidades independentes que movem carros.
 - Shutdown gracioso: `context` com cancelamento passado a todas as goroutines.
 - Data race: evitado com ownership do state no gameLoop e deep copies antes de envio.
-
----
-
-Se quiser, posso também gerar um diagrama ASCII mais visual ou um diagrama em DOT/graphviz.
